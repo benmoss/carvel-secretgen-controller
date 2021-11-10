@@ -1,4 +1,4 @@
-FROM photon:3.0
+FROM photon:3.0 as buildimage
 
 ARG SGCTRL_VER=development
 
@@ -27,8 +27,11 @@ COPY . .
 # helpful ldflags reference: https://www.digitalocean.com/community/tutorials/using-ldflags-to-set-version-information-for-go-applications
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-X 'main.Version=$SGCTRL_VER' -buildid=" -trimpath -o controller ./cmd/controller/...
 
+# Keep the container open
+ENTRYPOINT tail -f /dev/null
+
 # --- run ---
-FROM photon:3.0
+FROM photon:3.0 as runimage
 
 RUN tdnf install -y shadow-tools
 
@@ -36,7 +39,7 @@ RUN groupadd -g 2000 secretgen-controller && useradd -r -u 1000 --create-home -g
 RUN chmod g+w /etc/pki/tls/certs/ca-bundle.crt && chgrp secretgen-controller /etc/pki/tls/certs/ca-bundle.crt
 USER secretgen-controller
 
-COPY --from=0 /go/src/github.com/vmware-tanzu/carvel-secretgen-controller/controller secretgen-controller
+COPY --from=buildimage /go/src/github.com/vmware-tanzu/carvel-secretgen-controller/controller secretgen-controller
 
 ENV PATH="/:${PATH}"
 ENTRYPOINT ["/secretgen-controller"]
